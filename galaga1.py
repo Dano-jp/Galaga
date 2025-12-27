@@ -2,7 +2,7 @@ import pygame
 import sys
 import random
 import math
-
+import Puntaciones
 # --- CONFIGURACIÓN INICIAL ---
 width = 800
 height = 600
@@ -23,7 +23,38 @@ except:
 
 # --- LISTA DE IMÁGENES (Skins) ---
 # Asegúrate de que estos nombres y carpetas existan en tu PC
-imagenes_aliens = ["aliens/alien1.jpeg", "aliens/alien2.jpeg"]
+imagenes_aliens = ["aliens/alien1.jpeg", "aliens/alien2.jpeg"] 
+# --- PEDIR INPUT DEL NOMBRE EN EL JUEGO---
+def pedir_nombre_visual(puntos_finales):
+    nombre = ""
+    fuente = pygame.font.SysFont("Consolas", 50)
+    corriendo_input = True
+    
+    while corriendo_input:
+        screen.fill((10, 10, 30)) # Fondo oscuro espacial
+        
+        # Dibujar instrucciones y puntos
+        txt_puntos = fuente.render(f"SCORE FINAL: {puntos_finales}", True, (255, 215, 0))
+        txt_guia = fuente.render("INICIALES (MÁX 5):", True, (255, 255, 255))
+        txt_nombre = fuente.render(nombre + "_", True, (0, 255, 0))
+        
+        screen.blit(txt_puntos, (ANCHO//2 - 200, 200))
+        screen.blit(txt_guia, (ANCHO//2 - 250, 300))
+        screen.blit(txt_nombre, (ANCHO//2 - 50, 400))
+        
+        pygame.display.flip()
+
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
+                pygame.quit(); exit()
+            if evento.type == pygame.KEYDOWN:
+                if evento.key == pygame.K_RETURN and len(nombre) > 0:
+                    corriendo_input = False # Termina al pulsar Enter
+                elif evento.key == pygame.K_BACKSPACE:
+                    nombre = nombre[:-1]
+                elif len(nombre) < 5:
+                    nombre += evento.unicode.upper()
+    return nombre
 
 # --- CLASE JUGADOR ---
 class Player(pygame.sprite.Sprite):
