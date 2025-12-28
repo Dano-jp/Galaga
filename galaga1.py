@@ -10,7 +10,7 @@ black = (0, 0, 0)
 
 pygame.init()
 screen = pygame.display.set_mode((width, height))
-pygame.display.set_caption("Galaga - Formación Sincronizada")
+pygame.display.set_caption("Galaga - Lógica Running y Rebote")
 clock = pygame.time.Clock()
 
 # --- CARGA DE FONDO ---
@@ -39,7 +39,6 @@ class Player(pygame.sprite.Sprite):
         self.rect.bottom = height - 10
 
     def update(self, *args): 
-        # *args permite recibir ancla_x sin dar error
         keystate = pygame.key.get_pressed()
         if keystate[pygame.K_LEFT] and self.rect.left > 0:
             self.rect.x -= 7
@@ -60,14 +59,12 @@ class Alien1(pygame.sprite.Sprite):
         self.image.set_colorkey(black)
         self.rect = self.image.get_rect()
         
-        # Inicio fuera de pantalla
         self.rect.x = -100 if lado_inicio == "izq" else width + 100
         self.rect.y = height // 2
         
         self.px = float(self.rect.x)
         self.py = float(self.rect.y)
-        
-        self.x_relativa = x_relativa # Posición fija en la rejilla
+        self.x_relativa = x_relativa
         self.target_y = y_final
         self.delay = delay 
         self.angle = 0 
@@ -83,25 +80,17 @@ class Alien1(pygame.sprite.Sprite):
             self.angle += 0.12
             self.radio -= 2.5
             if self.radio < 0: self.radio = 0
-
-            # Su destino es el Ancla (que puede estar quieta o moviéndose) + su X relativa
             objetivo_x = ancla_x + self.x_relativa
-            
             self.px += (objetivo_x - self.px) * 0.1
             self.py += (self.target_y - self.py) * 0.1
-            
             off_x = math.cos(self.angle) * self.radio
             off_y = math.sin(self.angle) * self.radio
-            
             self.rect.x = int(self.px + off_x)
             self.rect.y = int(self.py + off_y)
-            
-            # Snap: Si ya llegó, se bloquea en modo ALINEADO
             if self.radio <= 0 and abs(objetivo_x - self.px) < 1:
                 self.estado = "ALINEADO"
         
         elif self.estado == "ALINEADO":
-            # Movimiento rígido pegado al ancla
             self.rect.x = int(ancla_x + self.x_relativa)
             self.rect.y = self.target_y
 
@@ -113,24 +102,21 @@ player = Player()
 all_sprites.add(player)
 
 columnas = 10
-filas = 5
+filas = 5 
 separacion_x = 80
 separacion_y = 60
 
-# El 'Ancla' central inicial
 ancho_bloque = (columnas - 1) * separacion_x
 ancla_x = (width - ancho_bloque) // 2
 
 for f in range(filas):
     foto = imagenes_aliens[f % len(imagenes_aliens)]
     lado = "izq" if f % 2 == 0 else "der"
-    delay_fila = f * 120 # Las filas entran una por una
-    
+    delay_fila = f * 90
     for c in range(columnas):
         x_rel = c * separacion_x
         y_dest = 80 + (f * separacion_y)
         delay_total = delay_fila + (c * 10)
-        
         alien = Alien1(x_rel, y_dest, delay_total, lado, foto)
         all_sprites.add(alien)
         alien_group.add(alien)
@@ -138,43 +124,46 @@ for f in range(filas):
 # --- BUCLE PRINCIPAL ---
 direccion = 1
 velocidad = 3
-formacion_lista = False
-running = True
 
-while running:
+# AQUÍ ESTÁ EL RUNNING (Punto 1)
+running = False 
+juego_activo = True 
+
+while juego_activo:
     clock.tick(60)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = False
+            juego_activo = False
 
-    # 1. VERIFICAR SI LA FORMACIÓN ESTÁ COMPLETA
-    if not formacion_lista:
-        formacion_lista = all(a.estado == "ALINEADO" for a in alien_group)
+    # AQUÍ ESTÁ EL IF PARA VERIFICAR LAS 5 HILERAS (Punto 2)
+    if not running:
+        # 'all' revisa que todos los aliens estén en estado "ALINEADO"
+        if all(a.estado == "ALINEADO" for a in alien_group):
+            running = True
 
-    # 2. LÓGICA DE MOVIMIENTO Y REBOTE
-    if formacion_lista:
+    # AQUÍ ESTÁ EL MOVIMIENTO Y EL REBOTE IZQUIERDA/DERECHA (Punto 3)
+    if running:
         ancla_x += velocidad * direccion
 
+        # Sensor de choque
         choque_borde = False
         for a in alien_group:
-            # Solo los que están vivos y alineados pueden causar rebote
+            # Si toca la derecha (width), cambia direccion a -1 (izquierda)
             if a.rect.right >= width - 10:
+                direccion = -1
                 choque_borde = True
-                direccion = -1 # Rebotar a la izquierda
                 break
+            # Si toca la izquierda (0), cambia direccion a 1 (derecha)
             if a.rect.left <= 10:
+                direccion = 1
                 choque_borde = True
-                direccion = 1 # Rebotar a la derecha
                 break
         
         if choque_borde:
-            # Empuje extra para no quedarse trabado en la colisión
+            # Empujoncito para evitar que se quede pegado al rebotar
             ancla_x += (velocidad + 1) * direccion
 
-    # 3. ACTUALIZAR TODO
     all_sprites.update(ancla_x)
-
-    # 4. DIBUJAR
     screen.blit(fondo, (0, 0))
     all_sprites.draw(screen)
     pygame.display.flip()
