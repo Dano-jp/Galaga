@@ -5,12 +5,12 @@ import math
 
 # --- CONFIGURACIÓN INICIAL ---
 width = 1040
-height = 740
+height = 700
 black = (0, 0, 0)
 
 pygame.init()
 screen = pygame.display.set_mode((width, height))
-pygame.display.set_caption("Galaga - Lógica Running y Rebote")
+pygame.display.set_caption("Galaga - Rebote y Regreso Fluido")
 clock = pygame.time.Clock()
 
 # --- CARGA DE FONDO ---
@@ -38,12 +38,12 @@ class Player(pygame.sprite.Sprite):
         self.rect.centerx = width // 2
         self.rect.bottom = height - 10
 
-    def update(self, *args): 
+    def update(self): 
         keystate = pygame.key.get_pressed()
         if keystate[pygame.K_LEFT] and self.rect.left > 0:
-            self.rect.x -= 7
+            self.rect.x -= 8 
         if keystate[pygame.K_RIGHT] and self.rect.right < width:
-            self.rect.x += 7
+            self.rect.x += 8
 
 # --- CLASE ALIEN ---
 class Alien1(pygame.sprite.Sprite):
@@ -76,9 +76,10 @@ class Alien1(pygame.sprite.Sprite):
             self.delay -= 1
             return
 
+        # 1. ENTRADA INICIAL (Pirueta)
         if self.estado == "ENTRANDO":
-            self.angle += 0.12
-            self.radio -= 2.5
+            self.angle += 0.15
+            self.radio -= 3.0
             if self.radio < 0: self.radio = 0
             objetivo_x = ancla_x + self.x_relativa
             self.px += (objetivo_x - self.px) * 0.1
@@ -90,9 +91,38 @@ class Alien1(pygame.sprite.Sprite):
             if self.radio <= 0 and abs(objetivo_x - self.px) < 1:
                 self.estado = "ALINEADO"
         
+        # 2. EN FORMACIÓN (Esperando)
         elif self.estado == "ALINEADO":
             self.rect.x = int(ancla_x + self.x_relativa)
             self.rect.y = self.target_y
+            self.px = float(self.rect.x)
+            self.py = float(self.rect.y)
+
+        # 3. ATACANDO (Bajando)
+        elif self.estado == "ATACANDO":
+            self.py += 10 
+            self.rect.y = int(self.py)
+            
+            # Si toca el suelo, cambia a estado REGRESANDO
+            if self.rect.bottom >= height:
+                self.estado = "REGRESANDO"
+
+        # 4. REGRESANDO (Subiendo suavemente a su sitio)
+        elif self.estado == "REGRESANDO":
+            dest_x = ancla_x + self.x_relativa
+            dest_y = self.target_y
+            
+            # Interpolación lineal para volver a su sitio
+            self.px += (dest_x - self.px) * 0.08
+            self.py += (dest_y - self.py) * 0.08
+            
+            self.rect.x = int(self.px)
+            self.rect.y = int(self.py)
+            
+            # Si está muy cerca de su posición original, se vuelve a alinear
+            distancia = math.sqrt((dest_x - self.px)**2 + (dest_y - self.py)**2)
+            if distancia < 2:
+                self.estado = "ALINEADO"
 
 # --- CONFIGURACIÓN DE FORMACIÓN ---
 all_sprites = pygame.sprite.Group()
@@ -105,18 +135,17 @@ columnas = 10
 filas = 5 
 separacion_x = 80
 separacion_y = 60
-
 ancho_bloque = (columnas - 1) * separacion_x
 ancla_x = (width - ancho_bloque) // 2
 
 for f in range(filas):
     foto = imagenes_aliens[f % len(imagenes_aliens)]
     lado = "izq" if f % 2 == 0 else "der"
-    delay_fila = f * 90
+    delay_fila = f * 60 
     for c in range(columnas):
         x_rel = c * separacion_x
         y_dest = 80 + (f * separacion_y)
-        delay_total = delay_fila + (c * 10)
+        delay_total = delay_fila + (c * 6)
         alien = Alien1(x_rel, y_dest, delay_total, lado, foto)
         all_sprites.add(alien)
         alien_group.add(alien)
@@ -124,10 +153,12 @@ for f in range(filas):
 # --- BUCLE PRINCIPAL ---
 direccion = 1
 velocidad = 3
-
-# AQUÍ ESTÁ EL RUNNING (Punto 1)
 running = False 
 juego_activo = True 
+
+# Cadencia de ataques
+ataque_cooldown = 30 
+timer_ataque = ataque_cooldown
 
 while juego_activo:
     clock.tick(60)
@@ -135,35 +166,29 @@ while juego_activo:
         if event.type == pygame.QUIT:
             juego_activo = False
 
-    # AQUÍ ESTÁ EL IF PARA VERIFICAR LAS 5 HILERAS (Punto 2)
     if not running:
-        # 'all' revisa que todos los aliens estén en estado "ALINEADO"
         if all(a.estado == "ALINEADO" for a in alien_group):
             running = True
 
-    # AQUÍ ESTÁ EL MOVIMIENTO Y EL REBOTE IZQUIERDA/DERECHA (Punto 3)
     if running:
+        # Movimiento lateral de la formación
         ancla_x += velocidad * direccion
+        if ancla_x > (width - ancho_bloque) - 50 or ancla_x < 50:
+            direccion *= -1
 
-        # Sensor de choque
-        choque_borde = False
-        for a in alien_group:
-            # Si toca la derecha (width), cambia direccion a -1 (izquierda)
-            if a.rect.right >= width - 10:
-                direccion = -1
-                choque_borde = True
-                break
-            # Si toca la izquierda (0), cambia direccion a 1 (derecha)
-            if a.rect.left <= 10:
-                direccion = 1
-                choque_borde = True
-                break
-        
-        if choque_borde:
-            # Empujoncito para evitar que se quede pegado al rebotar
-            ancla_x += (velocidad + 1) * direccion
+        # Lanzar nuevos atacantes
+        timer_ataque -= 1
+        if timer_ataque <= 0:
+            # Solo elegimos aliens que estén en la formación (ALINEADO)
+            aliens_listos = [a for a in alien_group if a.estado == "ALINEADO"]
+            if aliens_listos:
+                atacante = random.choice(aliens_listos)
+                atacante.estado = "ATACANDO"
+                timer_ataque = ataque_cooldown
 
-    all_sprites.update(ancla_x)
+    player.update()
+    alien_group.update(ancla_x)
+    
     screen.blit(fondo, (0, 0))
     all_sprites.draw(screen)
     pygame.display.flip()
