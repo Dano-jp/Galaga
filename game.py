@@ -79,7 +79,6 @@ class Meteor(pygame.sprite.Sprite):
     def __init__(self, width, height):
         super().__init__()
         self.width, self.height = width, height
-        # Usando .png como pediste
         self.image = load_image(IMAGES_DIR / "asteroide.png", (100, 100), (120, 120, 120))
         self.rect = self.image.get_rect(x=random.randint(0, width-100), y=-125)
         self.speedy = random.randint(1, 3)
@@ -170,7 +169,11 @@ class GalagaGame(GameBase):
         self.width, self.height = BASE_WIDTH, BASE_HEIGHT
         if not pygame.get_init(): pygame.init()
         if not pygame.mixer.get_init(): pygame.mixer.init()
-        self.fondo = load_image(IMAGES_DIR / "fondo.webp", (self.width, self.height), (10, 10, 30))
+        self.fondo = load_image(IMAGES_DIR / "fondo.png", (self.width, self.height), (10, 10, 30))
+        
+        # Estrellas pre-calculadas para el fondo espacial
+        self.stars = [(random.randint(0, self.width), random.randint(0, self.height)) for _ in range(100)]
+        
         self.snd_shoot = load_sound("shoot.mpeg")
         self.snd_kill_player = load_sound("kill 3.mpeg")
         raw_sounds = [load_sound("kill 1.mpeg"), load_sound("kill 2.mpeg")]
@@ -181,12 +184,10 @@ class GalagaGame(GameBase):
         self.rutas_aliens = [ALIENS_DIR / "alien 1.png", ALIENS_DIR / "alien 2.png", 
                              ALIENS_DIR / "alien3.png", ALIENS_DIR / "alien 4.png", 
                              ALIENS_DIR / "alien 5.png"]
-        # Inicializamos el stage aquí una sola vez
         self.stage = 1
         self.reset_game_vars()
 
     def reset_game_vars(self):
-        """Reinicia grupos y jugador, pero NO el stage ni el score."""
         self.all_sprites = pygame.sprite.Group()
         self.alien_group = pygame.sprite.Group()
         self.player_bullets = pygame.sprite.Group()
@@ -205,13 +206,12 @@ class GalagaGame(GameBase):
             if event.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
             
-            # --- TRUCO DE DESARROLLADOR CORREGIDO ---
             if event.type == pygame.KEYDOWN:
                 if pygame.K_1 <= event.key <= pygame.K_8:
                     if self.state != "ENTER_NAME":
-                        self.stage = event.key - pygame.K_0 # Actualizamos el stage
-                        self.reset_game_vars()              # Limpiamos sprites
-                        self.cargar_nivel(self.stage)       # Cargamos el nivel nuevo
+                        self.stage = event.key - pygame.K_0
+                        self.reset_game_vars()
+                        self.cargar_nivel(self.stage)
                         self.state = "PLAYING"
 
             if self.state == "MENU":
@@ -224,7 +224,7 @@ class GalagaGame(GameBase):
                     btn_quit = pygame.Rect(self.width//2 - btn_w//2, start_y + gap*2, btn_w, btn_h)
                     if btn_play.collidepoint(event.pos):
                         self.state = "PLAYING"
-                        self.stage = 1 # Empezar de cero al dar a jugar
+                        self.stage = 1
                         self.score = 0
                         self.reset_game_vars()
                         self.cargar_nivel(self.stage)
@@ -259,7 +259,6 @@ class GalagaGame(GameBase):
     def update(self, dt):
         if self.state != "PLAYING" or self.game_over: return
         
-        # Meteoros en niveles intermedios
         if 4 <= self.stage <= 6 and random.random() < 0.02:
             if len(self.meteors) < 5: 
                 m = Meteor(self.width, self.height)
@@ -274,7 +273,6 @@ class GalagaGame(GameBase):
         else:
             if len(self.boss_group) > 0: self.ancla_x = self.boss_group.sprites()[0].rect.centerx
 
-        # Colisiones
         if pygame.sprite.spritecollide(self.player, self.alien_group, False, pygame.sprite.collide_mask) or \
            pygame.sprite.spritecollide(self.player, self.enemy_bullets, False, pygame.sprite.collide_mask) or \
            pygame.sprite.spritecollide(self.player, self.meteors, False, pygame.sprite.collide_mask) or \
@@ -302,7 +300,6 @@ class GalagaGame(GameBase):
         self.meteors.update(); self.boss_group.update()
         for alien in self.alien_group: alien.update(self.ancla_x, self.disparar)
         
-        # Subir de nivel automáticamente si no hay enemigos
         if len(self.alien_group) == 0 and len(self.boss_group) == 0:
             self.stage += 1
             self.cargar_nivel(self.stage)
@@ -311,7 +308,15 @@ class GalagaGame(GameBase):
         if surface is None:
             try: surface = self._GameBase__surface
             except AttributeError: return
-        surface.blit(self.fondo, (0, 0))
+            
+        # --- LÓGICA DE FONDO DINÁMICA ---
+        if self.state == "MENU" or self.state == "SCORES":
+            surface.blit(self.fondo, (0, 0))
+        else:
+            # Dibujar espacio profundo negro con estrellas
+            surface.fill(BLACK)
+            for star in self.stars:
+                pygame.draw.circle(surface, WHITE, star, 1)
         
         if self.state == "MENU": menu.draw_menu(surface, pygame.mouse.get_pos())
         elif self.state == "SCORES": menu.draw_highscores(surface)
