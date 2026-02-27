@@ -1,22 +1,22 @@
 [
     {
         "nombre": "DANO",
-        "puntos": 500
+        "puntos": 585
+    },
+    {
+        "nombre": "DAN",
+        "puntos": 300
     },
     {
         "nombre": "BBB",
         "puntos": 280
     },
     {
-        "nombre": "FDFDF",
-        "puntos": 160
+        "nombre": "V",
+        "puntos": 190
     },
     {
-        "nombre": "DD",
-        "puntos": 135
-    },
-    {
-        "nombre": "DDD",
-        "puntos": 110
+        "nombre": "DAQ",
+        "puntos": 180
     }
 ]
